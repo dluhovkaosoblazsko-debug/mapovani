@@ -1,0 +1,13 @@
+{
+  "name": "mapovani-predluzeni",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jednoduchá aplikace pro mapování předlužení klienta dluhové poradny.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: mapovani-predluzeni
+    runtime: node
+    plan: free
+    autoDeploy: true
+    buildCommand: ""
+    startCommand: "node server.js"
+    envVars:
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_API_KEY
+        sync: false

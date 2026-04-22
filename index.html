@@ -1,0 +1,2005 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mapování předlužení s AI asistentem</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --line: #dbe3ee;
+      --text: #122033;
+      --muted: #5b6878;
+      --primary: #2563eb;
+      --primary-soft: #eff6ff;
+      --danger: #dc2626;
+      --warning: #b45309;
+      --success: #15803d;
+      --ai-gradient: linear-gradient(135deg, #8b5cf6, #3b82f6);
+      --radius: 14px;
+      --shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: Inter, Arial, sans-serif; }
+    body { min-height: 100vh; }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      background: #0f172a;
+      color: #e5edf8;
+      padding: 20px 18px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .sidebar h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      line-height: 1.2;
+    }
+
+    .sidebar .case-box {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 14px;
+      margin: 18px 0;
+    }
+
+    .sidebar .label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #9fb2cf;
+      margin-bottom: 6px;
+    }
+
+    .progress {
+      width: 100%;
+      height: 10px;
+      background: rgba(255,255,255,0.14);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress > span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #60a5fa, #2563eb);
+      transition: width .25s ease;
+    }
+
+    .menu {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .menu button,
+    .action-button,
+    .ghost-button,
+    .danger-button,
+    .small-button,
+    .ai-button {
+      border: 0;
+      border-radius: 12px;
+      cursor: pointer;
+      font: inherit;
+      transition: transform .12s ease, opacity .12s ease, background .12s ease;
+    }
+
+    .menu button {
+      text-align: left;
+      padding: 12px 14px;
+      background: transparent;
+      color: #dbe7f5;
+    }
+
+    .menu button.active {
+      background: rgba(37, 99, 235, 0.22);
+      color: #ffffff;
+    }
+
+    .menu button:hover,
+    .action-button:hover,
+    .ghost-button:hover,
+    .danger-button:hover,
+    .small-button:hover,
+    .ai-button:hover {
+      transform: translateY(-1px);
+      opacity: 0.95;
+    }
+
+    .sidebar-actions {
+      display: grid;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .action-button {
+      background: var(--primary);
+      color: #fff;
+      padding: 12px 14px;
+      font-weight: 600;
+    }
+
+    .ghost-button {
+      background: rgba(255,255,255,0.08);
+      color: #e5edf8;
+      padding: 12px 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .danger-button {
+      background: rgba(220, 38, 38, 0.16);
+      color: #ffe4e4;
+      padding: 12px 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .ai-button {
+      background: var(--ai-gradient);
+      color: #fff;
+      padding: 12px 14px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+
+    .main {
+      padding: 22px;
+      overflow-x: hidden;
+    }
+
+    .topbar {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      border-radius: 18px;
+      padding: 16px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .topbar h2 {
+      margin: 0;
+      font-size: 24px;
+    }
+
+    .topbar p {
+      margin: 4px 0 0;
+      color: var(--muted);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      background: var(--panel-soft);
+      border-radius: 999px;
+      padding: 10px 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .ai-card {
+      background: #faf5ff;
+      border: 1px solid #e9d5ff;
+    }
+
+    .card h3,
+    .card h4 {
+      margin: 0 0 8px;
+    }
+
+    .card p.card-note {
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+
+    .metric {
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .metric .metric-label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .metric .metric-value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .metric .metric-value.danger { color: var(--danger); }
+    .metric .metric-value.success { color: var(--success); }
+
+    .note-box {
+      background: var(--primary-soft);
+      border-left: 4px solid var(--primary);
+      border-radius: 10px;
+      padding: 14px;
+      color: #183b7a;
+      margin-bottom: 16px;
+    }
+
+    .note-box.danger-note {
+      background: #fef2f2;
+      border-left-color: var(--danger);
+      color: #991b1b;
+    }
+
+    .risk-item,
+    .list-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: #fff;
+    }
+
+    .risk-item.warning { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+    .risk-item.success { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="email"],
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 11px 12px;
+      font: inherit;
+      background: #fff;
+      color: var(--text);
+    }
+
+    textarea { min-height: 96px; resize: vertical; }
+
+    .checkbox-row {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .checkbox-row label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      font-weight: 500;
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .small-button {
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      color: var(--text);
+      padding: 10px 12px;
+      font-weight: 600;
+    }
+
+    .items-wrap {
+      display: grid;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .item-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 14px;
+    }
+
+    .item-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .item-head strong {
+      font-size: 15px;
+    }
+
+    .item-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .item-grid-3 {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .item-grid-full {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr;
+    }
+
+    .danger-link {
+      color: var(--danger);
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      border: none;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+      align-items: center;
+    }
+
+    .toolbar-grow {
+      flex: 1 1 260px;
+      min-width: 220px;
+    }
+
+    .registry-select {
+      min-height: 220px;
+    }
+
+    .status-line {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 6px 0 0;
+    }
+
+    .simple-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel-soft);
+    }
+
+    .simple-table {
+      width: 100%;
+      min-width: 1600px;
+      border-collapse: collapse;
+      background: var(--panel);
+    }
+
+    .simple-table th,
+    .simple-table td {
+      border-bottom: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      padding: 10px;
+      vertical-align: top;
+    }
+
+    .simple-table th:last-child,
+    .simple-table td:last-child {
+      border-right: 0;
+    }
+
+    .simple-table th {
+      background: var(--panel-soft);
+      font-size: 13px;
+      text-align: left;
+      color: var(--muted);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .simple-table td {
+      min-width: 120px;
+    }
+
+    .simple-table input,
+    .simple-table select {
+      width: 100%;
+      min-width: 120px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font: inherit;
+      background: #fff;
+    }
+
+    .simple-table .col-wide {
+      min-width: 220px;
+    }
+
+    .simple-table .col-medium {
+      min-width: 180px;
+    }
+
+    .field:has(#client_telefon),
+    .field:has(#client_email),
+    .field:has(#meta_stav_mapovani),
+    .field:has(#client_bydleni_najemne),
+    .field:has(#client_bydleni_energie) {
+      display: none;
+    }
+
+    .muted { color: var(--muted); }
+    .hidden { display: none !important; }
+    .small-muted { color: var(--muted); font-size: 13px; }
+    .input-invalid { border-color: #dc2626 !important; background: #fff5f5 !important; }
+    .validation-box {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: #9a3412;
+      margin-top: 12px;
+    }
+    .security-box {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: #1d4ed8;
+      margin-bottom: 16px;
+    }
+
+    .footer-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .report-editor {
+      min-height: 460px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      white-space: pre-wrap;
+    }
+
+    input[type="file"] { display: none; }
+
+    #toast {
+      visibility: hidden;
+      min-width: 250px;
+      background-color: var(--success);
+      color: #fff;
+      text-align: center;
+      border-radius: 12px;
+      padding: 12px 24px;
+      position: fixed;
+      z-index: 1000;
+      right: 30px;
+      bottom: 30px;
+      font-weight: 600;
+      font-size: 14px;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transition: opacity 0.3s, bottom 0.3s;
+    }
+
+    #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+
+    #aiLoaderOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.5);
+      backdrop-filter: blur(4px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      opacity: 0;
+      visibility: hidden;
+      transition: 0.3s;
+    }
+
+    #aiLoaderOverlay.active { opacity: 1; visibility: visible; }
+
+    .ai-spinner-box {
+      background: #fff;
+      padding: 30px 40px;
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+
+    .ai-spinner-box h3 { margin: 0 0 10px 0; color: #8b5cf6; }
+
+    @media (max-width: 1120px) {
+      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .item-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 920px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .sidebar {
+        position: static;
+        height: auto;
+        border-bottom-left-radius: 18px;
+        border-bottom-right-radius: 18px;
+      }
+      .grid-2,
+      .grid-3,
+      .grid-4,
+      .item-grid,
+      .item-grid-3 { grid-template-columns: 1fr; }
+      .topbar { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div id="toast">💾 Změny uloženy</div>
+
+  <div id="aiLoaderOverlay">
+    <div class="ai-spinner-box">
+      <h3>✨ AI Asistent přemýšlí...</h3>
+      <p>Může to zabrat pár vteřin.</p>
+    </div>
+  </div>
+
+  <datalist id="common-creditors">
+    <option value="Všeobecná zdravotní pojišťovna (VZP)">
+    <option value="Česká správa sociálního zabezpečení (ČSSZ)">
+    <option value="Finanční úřad">
+    <option value="Dopravní podnik Ostrava (DPO)">
+    <option value="Dopravní podnik hl. m. Prahy (DPP)">
+    <option value="ČEZ Prodej">
+    <option value="innogy">
+    <option value="E.ON">
+    <option value="Home Credit">
+    <option value="Provident Financial">
+    <option value="Česká spořitelna">
+    <option value="Komerční banka">
+    <option value="Air Bank">
+    <option value="Moneta Money Bank">
+    <option value="T-Mobile">
+    <option value="O2">
+    <option value="Vodafone">
+    <option value="Vlastník bytu / Družstvo">
+  </datalist>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <h1>🧭 Mapování předlužení</h1>
+      <div class="small-muted">Auto-save verze.</div>
+
+      <div class="case-box">
+        <div class="label">Klient</div>
+        <div id="sidebarClientName">Nové mapování</div>
+        <div class="label" style="margin-top:10px;">Stav</div>
+        <div id="sidebarStatus">rozpracovano</div>
+        <div class="progress"><span id="sidebarProgress"></span></div>
+        <div class="small-muted" id="sidebarProgressText" style="margin-top:8px;">Vyplněnost: 0 %</div>
+      </div>
+
+      <div class="menu" id="menu"></div>
+
+      <div class="sidebar-actions">
+        <button class="action-button" id="saveJsonBtn" type="button">⬇️ Stáhnout data (.json)</button>
+        <label class="ghost-button" for="loadJsonInput">⬆️ Nahrát data (.json)</label>
+        <input id="loadJsonInput" type="file" accept="application/json,.json" />
+        <button class="danger-button" id="resetCaseBtn" type="button">🗑️ Vymazat a začít znovu</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h2 id="pageTitle">Klient</h2>
+          <p id="pageSubtitle">Základní kontext potřebný pro mapování.</p>
+        </div>
+        <div class="status-pill">
+          <span>🕒</span>
+          <span id="lastUpdatedLabel">Bez změn</span>
+        </div>
+      </div>
+
+      <section class="view active" id="view-client">
+        <div class="card ai-card">
+          <h4>✨ AI Asistent: Načíst údaje z insolvenčního návrhu</h4>
+          <p class="card-note">Nahrajte PDF s návrhem na povolení oddlužení (nebo podobný dokument). AI z něj automaticky vyčte základní údaje o klientovi a předvyplní formulář.</p>
+          <div class="toolbar">
+            <label class="ai-button" for="ai_client_pdf_input" style="display:inline-block; cursor:pointer;">📄 Nahrát PDF - oddlužení</label>
+            <input id="ai_client_pdf_input" type="file" accept="application/pdf" style="display:none;" onchange="handleClientPdfUpload(event)" />
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Klient</h3>
+          <p class="card-note">Jen údaje potřebné pro mapování a zprávu.</p>
+          <div class="card" style="margin-bottom:16px;">
+            <p class="card-note">Seznam se načte automaticky po otevření aplikace. Vybraného klienta lze načíst do formuláře.</p>
+            <div class="toolbar">
+              <input id="clientRegistrySearch" class="toolbar-grow" type="text" placeholder="Vyhledat podle jména, projektu nebo města" oninput="updateClientRegistrySearch(this.value)" />
+              <button class="small-button" type="button" onclick="loadClientRegistry(true)">Obnovit seznam</button>
+              <button class="action-button" type="button" onclick="importSelectedClient()">Načíst do formuláře</button>
+            </div>
+            <div class="field">
+              <label for="clientRegistrySelect">Výběr klienta</label>
+              <select id="clientRegistrySelect" class="registry-select" size="8" onchange="setSelectedRegistryClient(this.value)"></select>
+              <div class="status-line" id="clientRegistryStatus">Registr klientů zatím nebyl načten.</div>
+            </div>
+          </div>
+          <div class="grid grid-2">
+            <div>
+              <div class="field"><label for="client_jmeno_klienta">Jméno klienta</label><input id="client_jmeno_klienta" type="text" oninput="saveClientSectionDebounced()" /></div>
+              <div class="field"><label for="client_rok_narozeni">Rok narození</label><input id="client_rok_narozeni" type="text" oninput="saveClientSectionDebounced()" /></div>
+              <div class="field"><label for="client_telefon">Telefon</label><input id="client_telefon" type="text" oninput="saveClientSectionDebounced()" /></div>
+              <div class="field"><label for="client_email">Email</label><input id="client_email" type="email" oninput="saveClientSectionDebounced()" /></div>
+              <div class="field"><label for="meta_stav_mapovani">Stav mapování</label><select id="meta_stav_mapovani" onchange="saveClientSectionDebounced()"></select></div>
+            </div>
+            <div>
+              <div class="field"><label for="client_domacnost_dospeli">Počet dospělých v domácnosti</label><input id="client_domacnost_dospeli" type="number" min="0" step="1" oninput="saveClientSectionDebounced()" /></div>
+              <div class="field"><label for="client_domacnost_deti">Počet dětí</label><input id="client_domacnost_deti" type="number" min="0" step="1" oninput="saveClientSectionDebounced()" /></div>
+              <div class="field"><label for="client_vyzivovane_osoby">Vyživované osoby</label><input id="client_vyzivovane_osoby" type="number" min="0" step="1" oninput="saveClientSectionDebounced()" /></div>
+              <div class="field"><label for="client_bydleni_typ">Typ bydlení</label><select id="client_bydleni_typ" onchange="saveClientSectionDebounced()"></select></div>
+              <div class="field"><label for="client_bydleni_najemne">Nájemné (Kč)</label><input id="client_bydleni_najemne" type="number" min="0" step="100" oninput="saveClientSectionDebounced()" /></div>
+              <div class="field"><label for="client_bydleni_energie">Energie (Kč)</label><input id="client_bydleni_energie" type="number" min="0" step="100" oninput="saveClientSectionDebounced()" /></div>
+            </div>
+          </div>
+          <div class="grid grid-2">
+            <div>
+              <div class="field"><label for="client_zamestnani_status">Status zaměstnání</label><select id="client_zamestnani_status" onchange="saveClientSectionDebounced()"></select></div>
+              <div class="field"><label for="client_hlavni_zdroj_prijmu">Dosažené vzdělání</label><input id="client_hlavni_zdroj_prijmu" type="text" oninput="saveClientSectionDebounced()" /></div>
+              <div class="field"><label for="client_zdravotni_socialni_omezeni">Zdravotní / sociální omezení</label><textarea id="client_zdravotni_socialni_omezeni" oninput="saveClientSectionDebounced()"></textarea></div>
+            </div>
+            <div>
+              <div class="field"><label for="client_poznamka_poradce">Poznámka poradce</label><textarea id="client_poznamka_poradce" oninput="saveClientSectionDebounced()"></textarea></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-obligations">
+        <div class="card ai-card">
+          <h4>✨ AI Asistent: Zpracování dokumentů (PDF)</h4>
+          <p class="card-note">Nahrajte PDF dokument (např. exekuční příkaz, výpis z registrů, dopis od věřitele). AI dokument přečte a pokusí se z něj automaticky vypsat závazky.</p>
+          <div class="toolbar">
+            <label class="ai-button" for="ai_pdf_input" style="display:inline-block; cursor:pointer;">📄 Nahrát a analyzovat PDF</label>
+            <input id="ai_pdf_input" type="file" accept="application/pdf" style="display:none;" onchange="handlePdfUpload(event)" />
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Závazky</h3>
+          <p class="card-note">Vyplňte jen základní přehled dluhů. Stačí věřitel, částka, datum vzniku, oblast a stav dluhu.</p>
+          <div class="grid grid-3" id="obligationsSummaryMetrics"></div>
+          <div class="toolbar">
+            <button class="action-button" type="button" onclick="addObligation()">＋ Přidat ručně závazek</button>
+          </div>
+          <div id="obligationsWrap" class="items-wrap"></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-budget">
+        <div class="card">
+          <label><input id="budget_enabled" type="checkbox" onchange="toggleBudgetEnabled(this.checked)" /> Vyplnit příjmy a výdaje</label>
+          <p class="card-note" style="margin-top:10px;">Ve výchozím stavu je tento list neaktivní. Po zaškrtnutí se zpřístupní.</p>
+          <div class="muted" id="budgetDisabledNotice">Tato část se vyplňuje jen pokud je potřeba mapovat rozpočet domácnosti.</div>
+        </div>
+
+        <div id="budgetContent" class="hidden">
+          <div class="grid grid-2">
+            <div class="card">
+              <h3>Příjmy</h3>
+              <p class="card-note">Položky příjmů domácnosti.</p>
+              <div class="toolbar">
+                <button class="action-button" type="button" onclick="addIncome()">＋ Přidat příjem</button>
+              </div>
+              <div id="incomeWrap" class="items-wrap"></div>
+            </div>
+            <div class="card">
+              <h3>Výdaje</h3>
+              <p class="card-note">Splátky dluhů se berou automaticky ze závazků.</p>
+              <div class="toolbar">
+                <button class="action-button" type="button" onclick="addExpense()">＋ Přidat výdaj</button>
+              </div>
+              <div id="expenseWrap" class="items-wrap"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Souhrn rozpočtu</h3>
+            <div class="grid grid-4" id="budgetSummaryMetrics"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-causes">
+        <div class="card">
+          <h3>Příčiny předlužení</h3>
+          <p class="card-note">Vyplňte příčiny předlužení a další kontextové informace volnou formou.</p>
+          <div class="field"><label for="causes_free_text">Příčiny předlužení</label><textarea id="causes_free_text" placeholder="Např. ztráta práce, rozpad vztahu, kumulace mikropůjček, propad příjmů..." oninput="saveMappingSummaryDebounced()"></textarea></div>
+          <div class="field"><label for="causes_context_text">Další kontextové informace</label><textarea id="causes_context_text" placeholder="Např. zdravotní omezení, péče o děti, nestabilní bydlení, probíhající jednání s věřiteli..." oninput="saveMappingSummaryDebounced()"></textarea></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-report">
+        <div class="card ai-card">
+          <h4>✨ AI Asistent: Tvorba zprávy</h4>
+          <p class="card-note">AI umí zadaná data vzít a sepsat je do souvislého, profesionálního textu. Lze také generovat zprávu klasicky z odrážek.</p>
+          <div class="form-actions" style="margin-top: 10px;">
+            <button class="action-button" type="button" onclick="generateReport()">Klasická zpráva (odrážky)</button>
+            <button class="ai-button" type="button" onclick="generateReportWithAI()">✨ Vygenerovat zprávu pomocí AI</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Další doporučené kroky</h3>
+          <div class="field"><label for="report_next_steps">Kroky (AI je při generování zohlední)</label><textarea id="report_next_steps" placeholder="Např. vyžádat podklady, ověřit exekuce, stabilizovat bydlení, doplnit rozpočet..." oninput="saveMappingSummaryDebounced()"></textarea></div>
+        </div>
+
+        <div class="card">
+          <h3>Chybějící podklady</h3>
+          <p class="card-note">1 řádek = 1 chybějící podklad nebo dokument.</p>
+          <div class="field"><label for="report_missing_docs">Podklady k doplnění</label><textarea id="report_missing_docs" placeholder="Např. smlouva k dluhu&#10;vyúčtování nájmu&#10;usnesení o exekuci" oninput="saveMappingSummaryDebounced()"></textarea></div>
+          <div id="reportValidationBox" class="validation-box hidden"></div>
+        </div>
+
+        <div class="card" id="reportPrintArea">
+          <h3>Samotná zpráva</h3>
+          <textarea id="report_edited_text" class="report-editor" placeholder="Sem se propíše návrh zprávy. Text pak můžete ještě ručně upravit." oninput="saveReportTextDebounced()"></textarea>
+          <div class="footer-actions no-print">
+            <button class="small-button" type="button" onclick="exportReportPdf()">⬇️ Exportovat zprávu (.pdf)</button>
+            <button class="small-button" type="button" onclick="exportReportWord()">⬇️ Exportovat zprávu (MS Word)</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    async function callGeminiServer(payload) {
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        let message = `HTTP error! status: ${response.status}`;
+        const errorText = await response.text();
+        if (errorText && errorText.trim()) {
+          try {
+            const errorPayload = JSON.parse(errorText);
+            if (errorPayload && typeof errorPayload.error === 'string' && errorPayload.error.trim()) {
+              message = errorPayload.error.trim();
+            } else {
+              message = errorText.trim();
+            }
+          } catch (jsonError) {
+            message = errorText.trim();
+          }
+        }
+        throw new Error(message);
+      }
+      return response.json();
+    }
+
+    async function callGeminiAPI(userPrompt, systemPrompt = "", expectJson = false) {
+      const payload = {
+        contents: [{ parts: [{ text: userPrompt }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] }
+      };
+
+      if (expectJson) {
+        payload.generationConfig = { responseMimeType: "application/json" };
+      }
+
+      const maxRetries = 5;
+      const delays = [1000, 2000, 4000, 8000, 16000];
+
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const result = await callGeminiServer(payload);
+          return result.candidates?.[0]?.content?.parts?.[0]?.text;
+        } catch (error) {
+          if (attempt === maxRetries - 1) {
+            console.error("AI API failed after retries:", error);
+            throw error;
+          }
+          await new Promise(res => setTimeout(res, delays[attempt]));
+        }
+      }
+    }
+
+    function toggleAILoader(show) {
+      const loader = document.getElementById('aiLoaderOverlay');
+      if (show) loader.classList.add('active');
+      else loader.classList.remove('active');
+    }
+
+    function detectPdfFormat(base64Data) {
+      try {
+        const sample = atob(String(base64Data || '').slice(0, 500000));
+        return {
+          hasXfa: sample.includes('/XFA'),
+          hasAcroForm: sample.includes('/AcroForm'),
+          hasPleaseWait: sample.includes('Please wait')
+        };
+      } catch (error) {
+        return { hasXfa: false, hasAcroForm: false, hasPleaseWait: false };
+      }
+    }
+
+    function xfaPdfErrorMessage() {
+      return "Tento PDF soubor je interaktivní formulář (XFA) a aplikace ho neumí spolehlivě přečíst.\n\nOtevřete ho v Adobe Readeru a použijte:\nTisk -> Microsoft Print to PDF\n\nPotom nahrajte nově vytvořený PDF soubor.";
+    }
+
+    function handleClientPdfUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      toggleAILoader(true);
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64Data = reader.result.split(',')[1];
+          const pdfFormat = detectPdfFormat(base64Data);
+          if (pdfFormat.hasXfa) {
+            alert(xfaPdfErrorMessage());
+            return;
+          }
+          await processClientPdfWithGemini(base64Data);
+        } catch (err) {
+          console.error(err);
+          alert(`Při zpracování PDF pomocí AI došlo k chybě.\n\n${err.message || 'Neznámá chyba.'}`);
+        } finally {
+          toggleAILoader(false);
+          event.target.value = '';
+        }
+      };
+      reader.onerror = error => {
+        console.error("Error reading file:", error);
+        alert("Nepodařilo se přečíst soubor.");
+        toggleAILoader(false);
+        event.target.value = '';
+      };
+
+      reader.readAsDataURL(file);
+    }
+
+    async function processClientPdfWithGemini(base64Data) {
+      const systemPrompt = `Jsi expertní asistent v dluhové poradně. Analyzuj přiložený dokument (Návrh na povolení oddlužení nebo obdobný) a vyčti z něj údaje o dlužníkovi a POKUD JSOU V DOKUMENTU, TAK I SEZNAM ZÁVAZKŮ.
+Vždy vrať pouze validní JSON objekt.
+Klíče JSON objektu musí být přesně tyto:
+- jmeno_klienta (string): Jméno a příjmení.
+- rok_narozeni (string): Pouze rok narození (např. "1980").
+- telefon (string): Telefonní číslo.
+- email (string): E-mailová adresa.
+- vyzivovane_osoby (number): Počet vyživovaných osob. Výchozí je 0.
+- zamestnani_status (string): Přípustné hodnoty jsou POUZE: "zamestnany", "nezamestnany", "osvc", "rodicovska", "invalidni_duchod", "starobni_duchod". Pokud nevíš, vrať "zamestnany".
+- hlavni_zdroj_prijmu (string): Název zaměstnavatele, typ důchodu nebo dávky.
+- obligations (array): Pole objektů, kde každý objekt představuje jeden dluh/závazek. Struktura objektu:
+   - veritel_nazev (string)
+   - vyse_dluhu (number)
+   - datum_vzniku_dluhu (string)
+   - oblast_dluhu (string): Vyber POUZE: "bydlení", "mikropůjčka", "státní sektor", "pokuty", "z podnikání", "výživné", "další".
+   - stav_dluhu (string): Vyber POUZE: "ohrožena splatnost", "po splatnosti", "exekuce".
+Pokud nějaký údaj nenajdeš, vrať prázdné hodnoty. Pokud nenajdeš závazky, vrať u 'obligations' prázdné pole []. Nevymýšlej si údaje.`;
+
+      const payload = {
+        contents: [{
+          parts: [
+            { text: "Analyzuj tento PDF dokument a extrahuj z něj údaje o klientovi do JSONu." },
+            { inlineData: { mimeType: "application/pdf", data: base64Data } }
+          ]
+        }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { responseMimeType: "application/json" }
+      };
+
+      const maxRetries = 5;
+      const delays = [1000, 2000, 4000, 8000, 16000];
+      let responseText = null;
+
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const result = await callGeminiServer(payload);
+          responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+          break;
+        } catch (error) {
+          if (attempt === maxRetries - 1) throw error;
+          await new Promise(res => setTimeout(res, delays[attempt]));
+        }
+      }
+
+      if (responseText) {
+        const parsedData = JSON.parse(responseText);
+        const foundClient = parsedData.jmeno_klienta && parsedData.jmeno_klienta.trim() !== "";
+        const foundObligations = parsedData.obligations && parsedData.obligations.length > 0;
+
+        if (!foundClient && !foundObligations) {
+          alert("AI prošla dokument, ale nenašla v něm žádné použitelné údaje.");
+          return;
+        }
+
+        appData.client.jmeno_klienta = parsedData.jmeno_klienta || appData.client.jmeno_klienta;
+        appData.client.rok_narozeni = parsedData.rok_narozeni || appData.client.rok_narozeni;
+        appData.client.telefon = parsedData.telefon || appData.client.telefon;
+        appData.client.email = parsedData.email || appData.client.email;
+        if (parsedData.vyzivovane_osoby !== undefined) appData.client.vyzivovane_osoby = parsedData.vyzivovane_osoby;
+        appData.client.zamestnani_status = parsedData.zamestnani_status || appData.client.zamestnani_status;
+        appData.client.hlavni_zdroj_prijmu = parsedData.hlavni_zdroj_prijmu || appData.client.hlavni_zdroj_prijmu;
+
+        let alertMsg = `Úspěch! AI analyzovala údaje a předvyplnila klienta: ${appData.client.jmeno_klienta}.`;
+
+        if (foundObligations) {
+          appData.obligations = [...appData.obligations, ...parsedData.obligations.map(o => ({
+            id: '',
+            veritel_nazev: o.veritel_nazev || 'Neznámý',
+            vyse_dluhu: o.vyse_dluhu || 0,
+            datum_vzniku_dluhu: o.datum_vzniku_dluhu || '',
+            oblast_dluhu: o.oblast_dluhu || 'další',
+            stav_dluhu: o.stav_dluhu || 'po splatnosti'
+          }))];
+          alertMsg += `\nZároveň bylo načteno ${parsedData.obligations.length} závazků do listu Závazky.`;
+        }
+
+        saveCollectionsAndRefresh();
+        alert(alertMsg);
+      } else {
+        throw new Error("Nepodařilo se získat odpověď od API.");
+      }
+    }
+
+    function handlePdfUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      toggleAILoader(true);
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64Data = reader.result.split(',')[1];
+          const pdfFormat = detectPdfFormat(base64Data);
+          if (pdfFormat.hasXfa) {
+            alert(xfaPdfErrorMessage());
+            return;
+          }
+          await processPdfWithGemini(base64Data);
+        } catch (err) {
+          console.error(err);
+          alert(`Při zpracování PDF pomocí AI došlo k chybě.\n\n${err.message || 'Neznámá chyba.'}`);
+        } finally {
+          toggleAILoader(false);
+          event.target.value = '';
+        }
+      };
+      reader.onerror = error => {
+        console.error("Error reading file:", error);
+        alert("Nepodařilo se přečíst soubor.");
+        toggleAILoader(false);
+        event.target.value = '';
+      };
+
+      reader.readAsDataURL(file);
+    }
+
+    async function processPdfWithGemini(base64Data) {
+      const systemPrompt = `Jsi expertní asistent pro zpracování dat v dluhové poradně. Tvojí úlohou je analyzovat přiložený dokument a vyčíst z něj seznam závazků do JSON formátu.
+Vždy vrať pouze JSON objekt obsahující pole 'obligations'.
+Každý objekt v poli ať má strukturu:
+- veritel_nazev (string)
+- vyse_dluhu (number)
+- datum_vzniku_dluhu (string)
+- oblast_dluhu (string): Vyber POUZE jednu z hodnot: "bydlení", "mikropůjčka", "státní sektor", "pokuty", "z podnikání", "výživné", "další".
+- stav_dluhu (string): Vyber POUZE jednu z hodnot: "ohrožena splatnost", "po splatnosti", "exekuce".`;
+
+      const payload = {
+        contents: [{
+          parts: [
+            { text: "Analyzuj tento PDF dokument a extrahuj z něj všechny závazky do JSONu." },
+            { inlineData: { mimeType: "application/pdf", data: base64Data } }
+          ]
+        }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { responseMimeType: "application/json" }
+      };
+
+      const maxRetries = 5;
+      const delays = [1000, 2000, 4000, 8000, 16000];
+      let responseText = null;
+
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const result = await callGeminiServer(payload);
+          responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+          break;
+        } catch (error) {
+          if (attempt === maxRetries - 1) throw error;
+          await new Promise(res => setTimeout(res, delays[attempt]));
+        }
+      }
+
+      if (responseText) {
+        const parsedData = JSON.parse(responseText);
+        if (parsedData && Array.isArray(parsedData.obligations) && parsedData.obligations.length > 0) {
+          appData.obligations = [...appData.obligations, ...parsedData.obligations.map(o => ({
+            id: '',
+            veritel_nazev: o.veritel_nazev || 'Neznámý',
+            vyse_dluhu: o.vyse_dluhu || 0,
+            datum_vzniku_dluhu: o.datum_vzniku_dluhu || '',
+            oblast_dluhu: o.oblast_dluhu || 'další',
+            stav_dluhu: o.stav_dluhu || 'ohrožena splatnost'
+          }))];
+          saveCollectionsAndRefresh();
+          alert(`Úspěch! AI analyzovala PDF dokument a přidala ${parsedData.obligations.length} závazků.`);
+        } else {
+          alert("AI prošla dokument, ale nenašla v něm žádné konkrétní závazky.");
+        }
+      } else {
+        throw new Error("Nepodařilo se získat odpověď od API.");
+      }
+    }
+
+    async function generateReportWithAI() {
+      if (!ensureReadyForReport()) return;
+      toggleAILoader(true);
+      try {
+        const systemPrompt = `Jsi profesionální, empatický a věcný sociální a dluhový poradce.
+Tvým úkolem je napsat 'Zprávu z mapování předlužení' pro klienta na základě předaných JSON dat.
+Struktura zprávy:
+1. Celkové shrnutí situace klienta.
+2. Přehled závazků.
+3. Analýza rizik.
+4. Doporučené kroky.
+Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vrať čistý text.`;
+
+        const dataForAI = {
+          client: appData.client,
+          obligations_summary: debtSummary(),
+          obligations_list: appData.obligations,
+          budget: appData.budget.enabled ? appData.budget.summary : "Nevyplněno",
+          causes: appData.mapping_summary.causes_free_text,
+          context: appData.mapping_summary.causes_context_text,
+          manual_next_steps: appData.mapping_summary.report_next_steps
+        };
+
+        const responseText = await callGeminiAPI(`Vygeneruj zprávu na základě těchto dat klienta: ${JSON.stringify(dataForAI)}`, systemPrompt, false);
+
+        if (responseText) {
+          appData.report.generated_text = responseText;
+          appData.report.edited_text = responseText;
+          touch();
+          renderMappingSummary();
+          alert('Chytrá zpráva byla vygenerována pomocí AI.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert("AI API selhalo. Prosím využijte zatím klasické generování.");
+      } finally {
+        toggleAILoader(false);
+      }
+    }
+
+    const MENU = [
+      { id: 'client', label: 'Klient', subtitle: 'Základní kontext potřebný pro mapování.' },
+      { id: 'obligations', label: 'Závazky', subtitle: 'Jádro mapování závazků.' },
+      { id: 'budget', label: 'Příjmy a výdaje', subtitle: 'Rozpočtová kapacita a potenciál.' },
+      { id: 'causes', label: 'Příčiny předlužení', subtitle: 'Důvody a dopady předlužení.' },
+      { id: 'report', label: 'Zpráva', subtitle: 'Shrnutí mapování, generování a export.' }
+    ];
+
+    const STAV_MAPOVANI = ['rozpracovano', 'dokonceno'];
+    const BYDLENI_TYPY = ['najem', 'podnajem', 'vlastni', 'ubytovna', 'u_rodiny', 'bez_stabilniho_bydleni'];
+    const ZAMESTNANI_STATUSY = ['zamestnany', 'nezamestnany', 'osvc', 'rodicovska', 'invalidni_duchod', 'starobni_duchod', 'brigady_neformalni_prace', 'bez_prijmu'];
+    const OBLASTI_DLUHU = ['bydlení', 'mikropůjčka', 'státní sektor', 'pokuty', 'z podnikání', 'výživné', 'další'];
+    const STAVY_DLUHU_SIMPLE = ['ohrožena splatnost', 'po splatnosti', 'exekuce'];
+    const PRIJEM_TYPY = ['mzda', 'davky', 'duchod', 'vyzivne', 'brigada', 'prispevek_domacnosti', 'jiny'];
+    const PRIJEM_PRAVIDELNOST = ['mesicne', 'nepravidelne', 'jednorazove'];
+    const JISTOTA_PRIJMU = ['stabilni', 'nejiste', 'kratkodobe'];
+    const VYDAJ_TYPY = ['najem', 'energie', 'jidlo', 'doprava', 'telefon', 'leky', 'skola_deti', 'jine'];
+    const NEZBYTNOST = ['nezbytne', 'omezitelne', 'volitelne'];
+    const CLIENT_REGISTRY_URL = 'https://script.google.com/macros/s/AKfycbygnuMfWH0AVTNw8GfiSyi4uvp3DNQmd-2VyJKSYXO8PfgsJPDEel9LVS5EqQduWRAjbg/exec';
+
+    function nowIso() { return new Date().toISOString(); }
+
+    function newCaseId() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      const random = Math.random().toString(16).slice(2, 6).toUpperCase();
+      return `MAP-${y}${m}${d}-${random}`;
+    }
+
+    function defaultCase() {
+      const created = nowIso();
+      return {
+        meta: { schema_version: '1.0', case_id: newCaseId(), stav_mapovani: 'rozpracovano', created_at: created, updated_at: created },
+        client: {
+          jmeno_klienta: '', rok_narozeni: '', telefon: '', email: '',
+          domacnost_dospeli: 1, domacnost_deti: 0, vyzivovane_osoby: 0,
+          bydleni_typ: 'najem', bydleni_najemne: 0, bydleni_energie: 0,
+          zamestnani_status: 'zamestnany', hlavni_zdroj_prijmu: '',
+          zdravotni_socialni_omezeni: '', poznamka_poradce: ''
+        },
+        obligations: [],
+        budget: {
+          enabled: false,
+          income_items: [], expense_items: [],
+          summary: { celkem_prijmy: 0, celkem_vydaje_bez_splatek: 0, celkem_splatky_dluhu: 0, celkem_vydaje_vcetne_splatek: 0, volne_prostredky: 0 }
+        },
+        causes: [],
+        client_registry: { items: [], selected_key: '', search: '', loaded_at: '', error: '' },
+        mapping_summary: {
+          hlavni_rizika: [], chybejici_podklady: [], causes_free_text: '', causes_context_text: '', report_next_steps: '', missing_docs_text: '',
+          hlavni_zjisteni: '', zaver_mapovani: '', doporucene_priority: []
+        },
+        report: { generated_text: '', edited_text: '' }
+      };
+    }
+
+    function normalizeAppData(raw) {
+      const base = defaultCase();
+      const source = raw && typeof raw === 'object' ? raw : {};
+      const normalized = {
+        ...base,
+        ...source,
+        meta: { ...base.meta, ...(source.meta || {}) },
+        client: { ...base.client, ...(source.client || {}) },
+        budget: {
+          ...base.budget,
+          ...(source.budget || {}),
+          enabled: !!(source.budget && source.budget.enabled),
+          income_items: Array.isArray(source.budget && source.budget.income_items) ? source.budget.income_items : [],
+          expense_items: Array.isArray(source.budget && source.budget.expense_items) ? source.budget.expense_items : [],
+          summary: { ...base.budget.summary, ...((source.budget && source.budget.summary) || {}) }
+        },
+        client_registry: { ...base.client_registry, ...(source.client_registry || {}) },
+        mapping_summary: { ...base.mapping_summary, ...(source.mapping_summary || {}) },
+        report: { ...base.report, ...(source.report || {}) }
+      };
+
+      normalized.obligations = Array.isArray(source.obligations) ? source.obligations : [];
+      normalized.causes = Array.isArray(source.causes) ? source.causes : [];
+      normalized.client_registry.items = Array.isArray(normalized.client_registry.items) ? normalized.client_registry.items : [];
+      normalized.mapping_summary.hlavni_rizika = Array.isArray(normalized.mapping_summary.hlavni_rizika) ? normalized.mapping_summary.hlavni_rizika : [];
+      normalized.mapping_summary.chybejici_podklady = Array.isArray(normalized.mapping_summary.chybejici_podklady) ? normalized.mapping_summary.chybejici_podklady : [];
+      normalized.mapping_summary.doporucene_priority = Array.isArray(normalized.mapping_summary.doporucene_priority) ? normalized.mapping_summary.doporucene_priority : [];
+
+      return normalized;
+    }
+
+    let appData = defaultCase();
+    let currentView = 'client';
+    let saveTimeout = null;
+
+    function clone(value) { return JSON.parse(JSON.stringify(value)); }
+
+    function safeNumber(value) {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : 0;
+    }
+
+    function fmtCurrency(value) {
+      const num = safeNumber(value);
+      const sign = num < 0 ? '-' : '';
+      return sign + Math.abs(num).toLocaleString('cs-CZ', { maximumFractionDigits: 0 }) + ' Kč';
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function fileSafeText(str) {
+      return String(str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9_-]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 60);
+    }
+
+    function reportFilename(ext) {
+      const name = fileSafeText(appData.client?.jmeno_klienta || '') || String(appData.meta.case_id || 'case').toLowerCase();
+      return `zprava_z_mapovani_${name}.${ext}`;
+    }
+
+    function formatDateForInput(value) {
+      if (!value) return '';
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleDateString('cs-CZ');
+    }
+
+    function normalizeEmploymentStatus(value) {
+      const text = String(value || '').toLowerCase().trim();
+      if (!text) return 'zamestnany';
+      if (text.includes('nezam')) return 'nezamestnany';
+      if (text.includes('osvč') || text.includes('osvc') || text.includes('podnik')) return 'osvc';
+      if (text.includes('rodič') || text.includes('rodic')) return 'rodicovska';
+      if (text.includes('invalid')) return 'invalidni_duchod';
+      if (text.includes('starob')) return 'starobni_duchod';
+      if (text.includes('brig') || text.includes('neform')) return 'brigady_neformalni_prace';
+      if (text.includes('bez příj') || text.includes('bez prij') || text.includes('neaktiv')) return 'bez_prijmu';
+      return 'zamestnany';
+    }
+
+    function registryClientKey(row) {
+      return [row['PROJEKT'], row['Jméno'], row['Příjmení'], row['Datum narození']].map(item => String(item || '').trim()).join('|');
+    }
+
+    function registryClientLabel(row) {
+      const fullName = [row['Jméno'], row['Příjmení']].filter(Boolean).join(' ').trim() || 'Neznámý klient';
+      const meta = [row['PROJEKT'], row['Město'], formatDateForInput(row['Datum narození'])].filter(Boolean).join(' • ');
+      return meta ? `${fullName} • ${meta}` : fullName;
+    }
+
+    function calculateAge(yearValue) {
+      const year = Number(String(yearValue || '').trim());
+      const currentYear = new Date().getFullYear();
+      if (Number.isFinite(year) && year >= 1900 && year <= currentYear) return String(currentYear - year);
+      return 'neuvedeno';
+    }
+
+    function calculateBudgetSummary() {
+      if (!appData.budget || typeof appData.budget !== 'object') appData.budget = {};
+      if (!Array.isArray(appData.budget.income_items)) appData.budget.income_items = [];
+      if (!Array.isArray(appData.budget.expense_items)) appData.budget.expense_items = [];
+      if (!appData.budget.summary || typeof appData.budget.summary !== 'object') appData.budget.summary = {};
+      const incomeTotal = appData.budget.income_items.reduce((sum, item) => sum + safeNumber(item.castka), 0);
+      const expenseTotal = appData.budget.expense_items.reduce((sum, item) => sum + safeNumber(item.castka), 0);
+      const debtInstallments = 0;
+      appData.budget.summary = {
+        celkem_prijmy: incomeTotal,
+        celkem_vydaje_bez_splatek: expenseTotal,
+        celkem_splatky_dluhu: debtInstallments,
+        celkem_vydaje_vcetne_splatek: expenseTotal + debtInstallments,
+        volne_prostredky: incomeTotal - expenseTotal - debtInstallments
+      };
+    }
+
+    function debtSummary() {
+      return {
+        pocet: appData.obligations.length,
+        celkem: appData.obligations.reduce((sum, item) => sum + safeNumber(item.vyse_dluhu), 0),
+        v_exekuci: appData.obligations.filter(item => item.stav_dluhu === 'exekuce').length,
+        po_splatnosti: appData.obligations.filter(item => item.stav_dluhu === 'po splatnosti').length,
+      };
+    }
+
+    function completionScore() {
+      let score = 0; const total = 6;
+      if (appData.client.jmeno_klienta) score += 1;
+      if (appData.obligations.length) score += 1;
+      if (!appData.budget.enabled || appData.budget.income_items.length || appData.budget.expense_items.length) score += 1;
+      if (appData.mapping_summary.causes_free_text) score += 1;
+      if (appData.mapping_summary.causes_context_text) score += 1;
+      if (appData.mapping_summary.report_next_steps || appData.report.generated_text) score += 1;
+      return Math.round((score / total) * 100);
+    }
+
+    function showToast() {
+      const toast = document.getElementById("toast");
+      toast.className = "show";
+      setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 2000);
+    }
+
+    function touch() {
+      calculateBudgetSummary();
+      appData.meta.updated_at = nowIso();
+      localStorage.setItem('auditDataBackupV4', JSON.stringify(appData));
+      showToast();
+    }
+
+    function debounce(func, wait) {
+      return function executedFunction(...args) {
+        const later = () => { clearTimeout(saveTimeout); func(...args); };
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(later, wait);
+      };
+    }
+
+    function syncObligationTotals() {
+      appData.obligations = appData.obligations.map(item => ({
+        ...item, vyse_dluhu: safeNumber(item.vyse_dluhu)
+      }));
+    }
+
+    function saveCollectionsAndRefresh() {
+      syncObligationTotals();
+      touch();
+      renderAll();
+    }
+
+    function renderMenu() {
+      document.getElementById('menu').innerHTML = MENU.map(item => `
+        <button class="${currentView === item.id ? 'active' : ''}" type="button" onclick="openView('${item.id}')">${item.label}</button>
+      `).join('');
+    }
+
+    function openView(viewId) {
+      currentView = viewId;
+      document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+      document.getElementById(`view-${viewId}`).classList.add('active');
+      const menuItem = MENU.find(item => item.id === viewId);
+      document.getElementById('pageTitle').textContent = menuItem.label;
+      document.getElementById('pageSubtitle').textContent = menuItem.subtitle;
+      renderMenu();
+    }
+
+    function populateSelect(selectId, options, currentValue) {
+      const select = document.getElementById(selectId);
+      if (select) {
+        select.innerHTML = options.map(option => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join('');
+        select.value = currentValue;
+      }
+    }
+
+    function renderSidebar() {
+      document.getElementById('sidebarClientName').textContent = appData.client.jmeno_klienta || 'Nové mapování';
+      document.getElementById('sidebarStatus').textContent = appData.meta.stav_mapovani || 'rozpracovano';
+      const score = completionScore();
+      document.getElementById('sidebarProgress').style.width = `${score}%`;
+      document.getElementById('sidebarProgressText').textContent = `Vyplněnost: ${score} %`;
+      document.getElementById('lastUpdatedLabel').textContent = appData.meta.updated_at ? `Poslední změna: ${new Date(appData.meta.updated_at).toLocaleString('cs-CZ')}` : 'Bez změn';
+    }
+
+    function renderBudgetSection() {
+      const enabled = !!appData.budget?.enabled;
+      const checkbox = document.getElementById('budget_enabled');
+      const content = document.getElementById('budgetContent');
+      const notice = document.getElementById('budgetDisabledNotice');
+      if (checkbox) checkbox.checked = enabled;
+      if (content) content.classList.toggle('hidden', !enabled);
+      if (notice) notice.classList.toggle('hidden', enabled);
+    }
+
+    function toggleBudgetEnabled(enabled) {
+      appData.budget.enabled = !!enabled;
+      touch();
+      renderBudgetSection();
+      renderSidebar();
+    }
+
+    function renderClientForm() {
+      const c = appData.client;
+      document.getElementById('client_jmeno_klienta').value = c.jmeno_klienta || '';
+      document.getElementById('client_rok_narozeni').value = c.rok_narozeni || '';
+      document.getElementById('client_telefon').value = c.telefon || '';
+      document.getElementById('client_email').value = c.email || '';
+      document.getElementById('client_domacnost_dospeli').value = c.domacnost_dospeli ?? 1;
+      document.getElementById('client_domacnost_deti').value = c.domacnost_deti ?? 0;
+      document.getElementById('client_vyzivovane_osoby').value = c.vyzivovane_osoby ?? 0;
+      document.getElementById('client_bydleni_najemne').value = c.bydleni_najemne ?? 0;
+      document.getElementById('client_bydleni_energie').value = c.bydleni_energie ?? 0;
+      document.getElementById('client_hlavni_zdroj_prijmu').value = c.hlavni_zdroj_prijmu || '';
+      document.getElementById('client_zdravotni_socialni_omezeni').value = c.zdravotni_socialni_omezeni || '';
+      document.getElementById('client_poznamka_poradce').value = c.poznamka_poradce || '';
+      populateSelect('meta_stav_mapovani', STAV_MAPOVANI, appData.meta.stav_mapovani || 'rozpracovano');
+      populateSelect('client_bydleni_typ', BYDLENI_TYPY, c.bydleni_typ || 'najem');
+      populateSelect('client_zamestnani_status', ZAMESTNANI_STATUSY, c.zamestnani_status || 'zamestnany');
+      document.getElementById('clientRegistrySearch').value = appData.client_registry?.search || '';
+      document.getElementById('client_jmeno_klienta').classList.toggle('input-invalid', !String(c.jmeno_klienta || '').trim());
+      renderClientRegistry();
+    }
+
+    const saveClientSectionDebounced = debounce(() => {
+      appData.client = {
+        jmeno_klienta: document.getElementById('client_jmeno_klienta').value.trim(),
+        rok_narozeni: document.getElementById('client_rok_narozeni').value.trim(),
+        telefon: document.getElementById('client_telefon').value.trim(),
+        email: document.getElementById('client_email').value.trim(),
+        domacnost_dospeli: safeNumber(document.getElementById('client_domacnost_dospeli').value),
+        domacnost_deti: safeNumber(document.getElementById('client_domacnost_deti').value),
+        vyzivovane_osoby: safeNumber(document.getElementById('client_vyzivovane_osoby').value),
+        bydleni_typ: document.getElementById('client_bydleni_typ').value,
+        bydleni_najemne: safeNumber(document.getElementById('client_bydleni_najemne').value),
+        bydleni_energie: safeNumber(document.getElementById('client_bydleni_energie').value),
+        zamestnani_status: document.getElementById('client_zamestnani_status').value,
+        hlavni_zdroj_prijmu: document.getElementById('client_hlavni_zdroj_prijmu').value.trim(),
+        zdravotni_socialni_omezeni: document.getElementById('client_zdravotni_socialni_omezeni').value.trim(),
+        poznamka_poradce: document.getElementById('client_poznamka_poradce').value.trim()
+      };
+      appData.meta.stav_mapovani = document.getElementById('meta_stav_mapovani').value;
+      touch();
+      renderSidebar();
+    }, 800);
+
+    function selectOptions(options, currentValue) {
+      return options.map(opt => `<option value="${escapeHtml(opt)}" ${opt === currentValue ? 'selected' : ''}>${escapeHtml(opt)}</option>`).join('');
+    }
+
+    function filteredRegistryItems() {
+      const search = String(appData.client_registry?.search || '').toLowerCase().trim();
+      const items = Array.isArray(appData.client_registry?.items) ? appData.client_registry.items : [];
+      if (!search) return items;
+      return items.filter(item => registryClientLabel(item).toLowerCase().includes(search));
+    }
+
+    function renderClientRegistry() {
+      const select = document.getElementById('clientRegistrySelect');
+      const status = document.getElementById('clientRegistryStatus');
+      if (!select || !status) return;
+      const items = filteredRegistryItems();
+      const selected = appData.client_registry?.selected_key || '';
+      select.innerHTML = items.length
+        ? items.map(item => `<option value="${escapeHtml(registryClientKey(item))}" ${registryClientKey(item) === selected ? 'selected' : ''}>${escapeHtml(registryClientLabel(item))}</option>`).join('')
+        : '<option value="">Žádní klienti k zobrazení.</option>';
+      const base = appData.client_registry?.error
+        ? `Chyba načtení registru: ${appData.client_registry.error}`
+        : appData.client_registry?.loaded_at
+          ? `Načteno ${Array.isArray(appData.client_registry.items) ? appData.client_registry.items.length : 0} klientů. Poslední načtení: ${new Date(appData.client_registry.loaded_at).toLocaleString('cs-CZ')}.`
+          : 'Registr klientů zatím nebyl načten.';
+      const suffix = appData.client_registry?.search ? ` Filtr: "${appData.client_registry.search}".` : '';
+      status.textContent = base + suffix;
+    }
+
+    function updateClientRegistrySearch(value) {
+      appData.client_registry.search = value;
+      renderClientRegistry();
+    }
+
+    function setSelectedRegistryClient(value) {
+      appData.client_registry.selected_key = value;
+    }
+
+    function handleClientRegistryResponse(items, showFeedback = false) {
+      if (!Array.isArray(items)) {
+        appData.client_registry.error = 'Odpověď není seznam klientů.';
+        renderClientRegistry();
+        return;
+      }
+      appData.client_registry.items = items;
+      appData.client_registry.loaded_at = nowIso();
+      appData.client_registry.error = '';
+      if (!appData.client_registry.selected_key && items.length) appData.client_registry.selected_key = registryClientKey(items[0]);
+      renderClientRegistry();
+      if (showFeedback) showToast();
+    }
+
+    function loadClientRegistry(showFeedback = false) {
+      const status = document.getElementById('clientRegistryStatus');
+      if (status) status.textContent = 'Načítám registr klientů z Google Sheetu...';
+      try {
+        const callbackName = '__clientRegistryJsonpCallback';
+        window[callbackName] = items => {
+          handleClientRegistryResponse(items, showFeedback);
+        };
+        const previous = document.getElementById('clientRegistryJsonp');
+        if (previous) previous.remove();
+        const script = document.createElement('script');
+        script.id = 'clientRegistryJsonp';
+        script.src = `${CLIENT_REGISTRY_URL}?callback=${callbackName}&_=${Date.now()}`;
+        script.onerror = () => {
+          appData.client_registry.error = 'Nepodařilo se načíst data z Google Sheetu.';
+          renderClientRegistry();
+        };
+        document.body.appendChild(script);
+      } catch (error) {
+        appData.client_registry.error = error.message || 'Nepodařilo se načíst data.';
+        renderClientRegistry();
+      }
+    }
+
+    function importSelectedClient() {
+      const selectedKey = appData.client_registry?.selected_key;
+      const row = (appData.client_registry?.items || []).find(item => registryClientKey(item) === selectedKey);
+      if (!row) return alert('Nejprve vyberte klienta ze seznamu.');
+      const fullName = [row['Jméno'], row['Příjmení']].filter(Boolean).join(' ').trim();
+      const extraNotes = [
+        row['SPÁDOVÉ MĚSTO'] ? `Spádové město: ${row['SPÁDOVÉ MĚSTO']}` : '',
+        row['PROJEKT'] ? `Projekt: ${row['PROJEKT']}` : ''
+      ].filter(Boolean);
+      appData.client = {
+        ...appData.client,
+        jmeno_klienta: fullName || appData.client.jmeno_klienta,
+        rok_narozeni: String(row['Datum narození'] || '').match(/\d{4}/)?.[0] || appData.client.rok_narozeni,
+        telefon: String(row['Telefon (nepovinné)'] || '').trim(),
+        email: String(row['Email/Datová schránka'] || '').trim(),
+        zamestnani_status: normalizeEmploymentStatus(row['Postavení na trhu práce']),
+        hlavni_zdroj_prijmu: String(row['Dosažené vzdělání'] || '').trim(),
+        zdravotni_socialni_omezeni: String(row['Znevýhodnění'] || '').trim(),
+        poznamka_poradce: ''
+      };
+      touch();
+      renderClientForm();
+      renderSidebar();
+      showToast();
+    }
+
+    function renderObligations() {
+      const wrap = document.getElementById('obligationsWrap');
+      const debt = debtSummary();
+      const metrics = document.getElementById('obligationsSummaryMetrics');
+      if (metrics) {
+        metrics.innerHTML = [
+          ['Počet dluhů', String(debt.pocet)],
+          ['Celková výše', fmtCurrency(debt.celkem)],
+          ['V exekuci', String(debt.v_exekuci)]
+        ].map(([label, value]) => `
+          <div class="metric">
+            <div class="metric-label">${escapeHtml(label)}</div>
+            <div class="metric-value">${escapeHtml(value)}</div>
+          </div>
+        `).join('');
+      }
+      if (!appData.obligations.length) {
+        wrap.innerHTML = '<div class="muted">Zatím není vložen žádný závazek. Můžete použít AI asistent výše.</div>';
+        return;
+      }
+      wrap.innerHTML = `
+        <div class="simple-table-wrap">
+          <table class="simple-table">
+            <thead>
+              <tr>
+                <th>Věřitel</th>
+                <th>Výše dluhu</th>
+                <th>Datum vzniku dluhu</th>
+                <th>Oblast dluhu</th>
+                <th>Stav dluhu</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${appData.obligations.map((item, index) => `
+                <tr>
+                  <td class="col-wide"><input class="${!String(item.veritel_nazev || '').trim() ? 'input-invalid' : ''}" type="text" placeholder="Např. VZP" value="${escapeHtml(item.veritel_nazev || '')}" oninput="updateObligation(${index}, 'veritel_nazev', this.value)" /></td>
+                  <td><input class="${safeNumber(item.vyse_dluhu) <= 0 ? 'input-invalid' : ''}" type="number" min="0" step="100" value="${safeNumber(item.vyse_dluhu)}" oninput="updateObligationNumber(${index}, 'vyse_dluhu', this.value)" /></td>
+                  <td class="col-medium"><input type="text" placeholder="Např. 03/2025" value="${escapeHtml(item.datum_vzniku_dluhu || '')}" oninput="updateObligation(${index}, 'datum_vzniku_dluhu', this.value)" /></td>
+                  <td class="col-medium"><select onchange="updateObligation(${index}, 'oblast_dluhu', this.value)">${selectOptions(OBLASTI_DLUHU, item.oblast_dluhu || 'další')}</select></td>
+                  <td class="col-medium"><select onchange="updateObligation(${index}, 'stav_dluhu', this.value)">${selectOptions(STAVY_DLUHU_SIMPLE, item.stav_dluhu || 'ohrožena splatnost')}</select></td>
+                  <td><button class="danger-link" type="button" onclick="removeObligation(${index})">Smazat</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderIncome() {
+      const wrap = document.getElementById('incomeWrap');
+      if (!appData.budget.income_items.length) {
+        wrap.innerHTML = '<div class="muted">Zatím není vložen žádný příjem.</div>';
+        return;
+      }
+      wrap.innerHTML = appData.budget.income_items.map((item, index) => `
+        <div class="item-card">
+          <div class="item-head">
+            <strong>${escapeHtml(item.typ || 'Nový příjem')}</strong>
+            <button class="danger-link" type="button" onclick="removeIncome(${index})">Smazat</button>
+          </div>
+          <div class="item-grid-3">
+            <div class="field"><label>Typ</label><select onchange="updateIncome(${index}, 'typ', this.value)">${selectOptions(PRIJEM_TYPY, item.typ || 'mzda')}</select></div>
+            <div class="field"><label>Částka (Kč)</label><input type="number" min="0" step="100" value="${safeNumber(item.castka)}" oninput="updateIncomeNumber(${index}, 'castka', this.value)" /></div>
+            <div class="field"><label>Pravidelnost</label><select onchange="updateIncome(${index}, 'pravidelnost', this.value)">${selectOptions(PRIJEM_PRAVIDELNOST, item.pravidelnost || 'mesicne')}</select></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderExpense() {
+      const wrap = document.getElementById('expenseWrap');
+      if (!appData.budget.expense_items.length) {
+        wrap.innerHTML = '<div class="muted">Zatím není vložen žádný výdaj.</div>';
+        return;
+      }
+      wrap.innerHTML = appData.budget.expense_items.map((item, index) => `
+        <div class="item-card">
+          <div class="item-head">
+            <strong>${escapeHtml(item.typ || 'Nový výdaj')}</strong>
+            <button class="danger-link" type="button" onclick="removeExpense(${index})">Smazat</button>
+          </div>
+          <div class="item-grid-3">
+            <div class="field"><label>Typ</label><select onchange="updateExpense(${index}, 'typ', this.value)">${selectOptions(VYDAJ_TYPY, item.typ || 'najem')}</select></div>
+            <div class="field"><label>Částka (Kč)</label><input type="number" min="0" step="100" value="${safeNumber(item.castka)}" oninput="updateExpenseNumber(${index}, 'castka', this.value)" /></div>
+            <div class="field"><label>Nezbytnost</label><select onchange="updateExpense(${index}, 'nezbytnost', this.value)">${selectOptions(NEZBYTNOST, item.nezbytnost || 'nezbytne')}</select></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderCauses() {
+      const freeText = document.getElementById('causes_free_text');
+      const contextText = document.getElementById('causes_context_text');
+      if (freeText) freeText.value = appData.mapping_summary.causes_free_text || '';
+      if (contextText) contextText.value = appData.mapping_summary.causes_context_text || '';
+    }
+
+    function renderBudgetSummary() {
+      calculateBudgetSummary();
+      const summary = appData.budget.summary;
+      document.getElementById('budgetSummaryMetrics').innerHTML = [
+        ['Příjmy', fmtCurrency(summary.celkem_prijmy)],
+        ['Výdaje bez splátek', fmtCurrency(summary.celkem_vydaje_bez_splatek)],
+        ['Výdaje celkem', fmtCurrency(summary.celkem_vydaje_vcetne_splatek)],
+        ['Volné prostředky', fmtCurrency(summary.volne_prostredky)]
+      ].map(([label, value]) => `
+        <div class="metric">
+          <div class="metric-label">${escapeHtml(label)}</div>
+          <div class="metric-value ${label === 'Volné prostředky' ? (summary.volne_prostredky < 0 ? 'danger' : 'success') : ''}">${escapeHtml(value)}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderMappingSummary() {
+      const nextSteps = document.getElementById('report_next_steps');
+      const missingDocs = document.getElementById('report_missing_docs');
+      const editor = document.getElementById('report_edited_text');
+      if (nextSteps) nextSteps.value = appData.mapping_summary.report_next_steps || '';
+      if (missingDocs) missingDocs.value = appData.mapping_summary.missing_docs_text || '';
+      if (editor) editor.value = appData.report.edited_text || appData.report.generated_text || '';
+      renderReportValidationBox();
+    }
+
+    function collectMappingSummaryFromForm() {
+      const nextSteps = document.getElementById('report_next_steps');
+      const missingDocs = document.getElementById('report_missing_docs');
+      const causesText = document.getElementById('causes_free_text');
+      const causesContextText = document.getElementById('causes_context_text');
+      return {
+        ...appData.mapping_summary,
+        causes_free_text: causesText ? causesText.value.trim() : (appData.mapping_summary.causes_free_text || ''),
+        causes_context_text: causesContextText ? causesContextText.value.trim() : (appData.mapping_summary.causes_context_text || ''),
+        report_next_steps: nextSteps ? nextSteps.value.trim() : (appData.mapping_summary.report_next_steps || ''),
+        missing_docs_text: missingDocs ? missingDocs.value.trim() : (appData.mapping_summary.missing_docs_text || '')
+      };
+    }
+
+    function saveMappingSummaryNow() {
+      appData.mapping_summary = collectMappingSummaryFromForm();
+      touch();
+    }
+
+    const saveMappingSummaryDebounced = debounce(() => {
+      appData.mapping_summary = collectMappingSummaryFromForm();
+      touch();
+    }, 800);
+
+    function getValidationIssues() {
+      const issues = [];
+      if (!String(appData.client?.jmeno_klienta || '').trim()) issues.push('Doplňte jméno klienta.');
+      if (!Array.isArray(appData.obligations) || !appData.obligations.length) issues.push('Doplňte alespoň jeden závazek.');
+      (appData.obligations || []).forEach((item, index) => {
+        if (!String(item.veritel_nazev || '').trim()) issues.push(`Závazek ${index + 1}: chybí věřitel.`);
+        if (safeNumber(item.vyse_dluhu) <= 0) issues.push(`Závazek ${index + 1}: výše dluhu musí být větší než 0 Kč.`);
+      });
+      return issues;
+    }
+
+    function renderReportValidationBox() {
+      const box = document.getElementById('reportValidationBox');
+      if (!box) return;
+      const issues = getValidationIssues();
+      if (!issues.length) {
+        box.classList.add('hidden');
+        box.innerHTML = '';
+        return;
+      }
+      box.classList.remove('hidden');
+      box.innerHTML = `<strong>Před návrhem zprávy ještě chybí:</strong><br>${issues.map(item => `- ${escapeHtml(item)}`).join('<br>')}`;
+    }
+
+    function ensureReadyForReport() {
+      saveMappingSummaryNow();
+      const issues = getValidationIssues();
+      renderReportValidationBox();
+      if (!issues.length) return true;
+      currentView = 'report';
+      openView('report');
+      alert(`Před vytvořením zprávy je potřeba doplnit:\n\n${issues.join('\n')}`);
+      return false;
+    }
+
+    function buildGeneratedReport() {
+      syncObligationTotals();
+      calculateBudgetSummary();
+      const debt = debtSummary();
+      const client = appData.client;
+
+      const obligationLines = appData.obligations.length
+        ? appData.obligations.map(item => `- ${item.veritel_nazev || 'Neuvedeno'} | výše: ${fmtCurrency(item.vyse_dluhu)} | stav: ${item.stav_dluhu || 'ohrožena splatnost'}`)
+        : ['- Závazky zatím nejsou vyplněny.'];
+
+      const causeLines = appData.mapping_summary.causes_free_text ? appData.mapping_summary.causes_free_text.split('\n').map(line => line.trim()).filter(Boolean) : ['Neuvedeno.'];
+      const contextLines = appData.mapping_summary.causes_context_text ? appData.mapping_summary.causes_context_text.split('\n').map(line => line.trim()).filter(Boolean) : ['Neuvedeno.'];
+      const missingDocLines = appData.mapping_summary.missing_docs_text ? appData.mapping_summary.missing_docs_text.split('\n').map(line => line.trim()).filter(Boolean) : ['Neuvedeno.'];
+      const nextStepLines = appData.mapping_summary.report_next_steps ? appData.mapping_summary.report_next_steps.split('\n').map(line => line.trim()).filter(Boolean) : ['Neuvedeno.'];
+
+      const lines = [
+        `ZPRÁVA Z MAPOVÁNÍ PŘEDLUŽENÍ – ${client.jmeno_klienta || 'bez jména'}`,
+        '',
+        '1. Klient',
+        `Věk: ${calculateAge(client.rok_narozeni)}`,
+        `Zaměstnání: ${client.zamestnani_status || 'neuvedeno'}`,
+        `Poznámka poradce: ${client.poznamka_poradce || 'neuvedeno'}`,
+        '',
+        '2. Závazky',
+        `Počet dluhů: ${debt.pocet} | celková výše: ${fmtCurrency(debt.celkem)} | v exekuci: ${debt.v_exekuci}.`,
+        ...obligationLines,
+        '',
+        '3. Příčiny předlužení',
+        ...causeLines,
+        '',
+        '4. Další kontextové informace',
+        ...contextLines,
+        '',
+        '5. Chybějící podklady',
+        ...missingDocLines.map(item => `- ${item}`),
+        '',
+        '6. Další doporučené kroky',
+        ...nextStepLines.map(item => `- ${item}`)
+      ];
+      return lines.join('\n');
+    }
+
+    function generateReport() {
+      if (!ensureReadyForReport()) return;
+      const generated = buildGeneratedReport();
+      appData.report.generated_text = generated;
+      appData.report.edited_text = generated;
+      touch();
+      renderMappingSummary();
+      alert('Klasický návrh zprávy (odrážky) byl vygenerován.');
+    }
+
+    const saveReportTextDebounced = debounce(() => {
+      appData.report.edited_text = document.getElementById('report_edited_text').value;
+      touch();
+    }, 800);
+
+    function currentReportText() {
+      const edited = document.getElementById('report_edited_text').value.trim();
+      return edited ? edited : (appData.report.generated_text || '');
+    }
+
+    function sanitizeReportExportText(text) {
+      return String(text || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .replace(/\*/g, '')
+        .replace(/[ \t]+\n/g, '\n')
+        .trim();
+    }
+
+    function reportTextToWordHtml(text) {
+      const lines = sanitizeReportExportText(text).split('\n');
+      const blocks = [];
+      let bulletItems = [];
+
+      function flushBullets() {
+        if (!bulletItems.length) return;
+        blocks.push(`<ul style="margin: 0 0 14px 22px; padding: 0;">${bulletItems.join('')}</ul>`);
+        bulletItems = [];
+      }
+
+      lines.forEach((rawLine, index) => {
+        const line = rawLine.trim();
+        if (!line) {
+          flushBullets();
+          return;
+        }
+
+        if (index === 0) {
+          flushBullets();
+          blocks.push(`<h1 style="font-family: Calibri, Arial, sans-serif; font-size: 20pt; margin: 0 0 18px; color: #1f2937;">${escapeHtml(line)}</h1>`);
+          return;
+        }
+
+        if (/^\d+\.\s+/.test(line)) {
+          flushBullets();
+          blocks.push(`<h2 style="font-family: Calibri, Arial, sans-serif; font-size: 13.5pt; margin: 18px 0 8px; color: #1f2937;">${escapeHtml(line)}</h2>`);
+          return;
+        }
+
+        if (/^- /.test(line)) {
+          bulletItems.push(`<li style="margin: 0 0 6px;">${escapeHtml(line.replace(/^- /, ''))}</li>`);
+          return;
+        }
+
+        flushBullets();
+        blocks.push(`<p style="margin: 0 0 12px; line-height: 1.55;">${escapeHtml(line)}</p>`);
+      });
+
+      flushBullets();
+      return blocks.join('');
+    }
+
+    function addObligation() {
+      appData.obligations.push({
+        id: '', veritel_nazev: '', vyse_dluhu: 0, datum_vzniku_dluhu: '', oblast_dluhu: 'další', stav_dluhu: 'ohrožena splatnost'
+      });
+      saveCollectionsAndRefresh();
+    }
+
+    function removeObligation(index) { appData.obligations.splice(index, 1); saveCollectionsAndRefresh(); renderReportValidationBox(); }
+    function updateObligation(index, key, value) { appData.obligations[index][key] = value; touch(); renderObligations(); renderReportValidationBox(); }
+    function updateObligationNumber(index, key, value) { appData.obligations[index][key] = safeNumber(value); touch(); renderObligations(); renderBudgetSummary(); renderReportValidationBox(); }
+
+    function addIncome() { appData.budget.income_items.push({ id: '', typ: 'mzda', castka: 0, pravidelnost: 'mesicne' }); saveCollectionsAndRefresh(); }
+    function removeIncome(index) { appData.budget.income_items.splice(index, 1); saveCollectionsAndRefresh(); }
+    function updateIncome(index, key, value) { appData.budget.income_items[index][key] = value; touch(); }
+    function updateIncomeNumber(index, key, value) { appData.budget.income_items[index][key] = safeNumber(value); touch(); renderBudgetSummary(); }
+
+    function addExpense() { appData.budget.expense_items.push({ id: '', typ: 'najem', castka: 0, nezbytnost: 'nezbytne' }); saveCollectionsAndRefresh(); }
+    function removeExpense(index) { appData.budget.expense_items.splice(index, 1); saveCollectionsAndRefresh(); }
+    function updateExpense(index, key, value) { appData.budget.expense_items[index][key] = value; touch(); }
+    function updateExpenseNumber(index, key, value) { appData.budget.expense_items[index][key] = safeNumber(value); touch(); renderBudgetSummary(); }
+
+    function downloadBlob(filename, content, type) {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function exportReportWord() {
+      const content = currentReportText();
+      if (!content) { alert('Zpráva je zatím prázdná.'); return; }
+
+      const preHtml = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Zpráva</title></head><body>";
+      const postHtml = "</body></html>";
+      const htmlContent = escapeHtml(content).replace(/\n/g, '<br>');
+      const html = preHtml + "<div style='font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6;'>" + htmlContent + "</div>" + postHtml;
+
+      const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = reportFilename('doc');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function exportReportWord() {
+      const content = currentReportText();
+      if (!content) { alert('ZprĂˇva je zatĂ­m prĂˇzdnĂˇ.'); return; }
+
+      const cleanContent = sanitizeReportExportText(content);
+      const preHtml = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>ZprĂˇva</title><style>body{font-family:Calibri,Arial,sans-serif;color:#111827;font-size:11pt;margin:32px;} p,li{font-size:11pt;} ul{list-style-type:disc;}</style></head><body>";
+      const postHtml = "</body></html>";
+      const htmlContent = reportTextToWordHtml(cleanContent);
+      const html = preHtml + htmlContent + postHtml;
+
+      const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = reportFilename('doc');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function exportReportPdf() {
+      const content = sanitizeReportExportText(currentReportText());
+      if (!content) { alert('Zpráva je zatím prázdná.'); return; }
+      const printDiv = document.createElement('div');
+      printDiv.innerHTML = `<h1 style="font-family:Arial,sans-serif;font-size:22px;margin-bottom:20px;border-bottom:2px solid #000;padding-bottom:10px;">Zpráva z mapování předlužení</h1><div style="font-family:Arial,sans-serif;font-size:12px;line-height:1.65;white-space:pre-wrap;">${escapeHtml(content)}</div>`;
+      html2pdf().set({ margin: 15, filename: reportFilename('pdf'), image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(printDiv).save();
+    }
+
+    function exportJson() {
+      touch();
+      downloadBlob(`mapovani.json`, JSON.stringify(appData, null, 2), 'application/json;charset=utf-8');
+    }
+
+    function renderAll() {
+      if (!appData.client) appData = defaultCase();
+      renderMenu();
+      renderSidebar();
+      renderClientForm();
+      renderObligations();
+      renderIncome();
+      renderExpense();
+      renderBudgetSection();
+      renderBudgetSummary();
+      renderCauses();
+      renderMappingSummary();
+      openView(currentView);
+    }
+
+    document.getElementById('saveJsonBtn').addEventListener('click', exportJson);
+    document.getElementById('loadJsonInput').addEventListener('change', event => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          appData = normalizeAppData(JSON.parse(reader.result));
+          renderAll();
+          alert('JSON byl načten.');
+        } catch (error) {
+          alert('Soubor se nepodařilo načíst.');
+        }
+      };
+      reader.readAsText(file, 'utf-8');
+      event.target.value = '';
+    });
+
+    document.getElementById('resetCaseBtn').addEventListener('click', () => {
+      if (confirm('Opravdu chcete vymazat data a začít nové prázdné mapování?')) {
+        localStorage.removeItem('auditDataBackupV4');
+        appData = defaultCase();
+        renderAll();
+      }
+    });
+
+    const savedLocal = localStorage.getItem('auditDataBackupV4');
+    if (savedLocal) {
+      try { appData = normalizeAppData(JSON.parse(savedLocal)); } catch (e) {}
+    }
+
+    renderAll();
+    loadClientRegistry();
+  </script>
+</body>
+</html>
