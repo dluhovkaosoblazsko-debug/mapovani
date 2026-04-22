@@ -169,7 +169,7 @@ function proxyGemini(payload) {
   });
 }
 
-function fetchText(targetUrl) {
+function fetchText(targetUrl, redirectCount = 0) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(targetUrl);
     const transport = parsed.protocol === 'https:' ? https : http;
@@ -183,6 +183,20 @@ function fetchText(targetUrl) {
       let data = '';
       response.on('data', chunk => { data += chunk; });
       response.on('end', () => {
+        if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
+          if (redirectCount >= 5) {
+            reject(new Error('Prilis mnoho presmerovani pri nacitani registru klientu.'));
+            return;
+          }
+          const location = response.headers.location;
+          if (!location) {
+            reject(new Error(`Registr klientu vratil presmerovani (${response.statusCode}) bez adresy.`));
+            return;
+          }
+          const redirectUrl = new URL(location, parsed).toString();
+          fetchText(redirectUrl, redirectCount + 1).then(resolve).catch(reject);
+          return;
+        }
         if (response.statusCode < 200 || response.statusCode >= 300) {
           reject(new Error(`Registr klientu vratil chybu (${response.statusCode}).`));
           return;
