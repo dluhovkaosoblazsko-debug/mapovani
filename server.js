@@ -46,6 +46,13 @@ function serveFile(res, filePath) {
     return;
   }
 
+  const stat = fs.statSync(filePath);
+  if (!stat.isFile()) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Not found');
+    return;
+  }
+
   const ext = path.extname(filePath).toLowerCase();
   const typeMap = {
     '.html': 'text/html; charset=utf-8',
@@ -135,7 +142,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+    if ((req.method === 'GET' || req.method === 'HEAD') && (url.pathname === '/' || url.pathname === '/index.html')) {
       serveFile(res, path.join(ROOT, 'index.html'));
       return;
     }
