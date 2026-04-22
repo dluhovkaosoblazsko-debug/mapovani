@@ -27,6 +27,44 @@ function loadEnvFile() {
 loadEnvFile();
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const BASIC_AUTH_USER = process.env.BASIC_AUTH_USER || '';
+const BASIC_AUTH_PASSWORD = process.env.BASIC_AUTH_PASSWORD || '';
+
+function isBasicAuthEnabled() {
+  return !!(BASIC_AUTH_USER && BASIC_AUTH_PASSWORD);
+}
+
+function decodeBasicAuthHeader(headerValue) {
+  if (!headerValue || !headerValue.startsWith('Basic ')) return null;
+  try {
+    const decoded = Buffer.from(headerValue.slice(6), 'base64').toString('utf8');
+    const separatorIndex = decoded.indexOf(':');
+    if (separatorIndex === -1) return null;
+    return {
+      user: decoded.slice(0, separatorIndex),
+      password: decoded.slice(separatorIndex + 1)
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function isAuthorized(req) {
+  if (!isBasicAuthEnabled()) return true;
+  const credentials = decodeBasicAuthHeader(req.headers.authorization || '');
+  return !!credentials && credentials.user === BASIC_AUTH_USER && credentials.password === BASIC_AUTH_PASSWORD;
+}
+
+function requestBasicAuth(res) {
+  res.writeHead(401, {
+    'Content-Type': 'text/plain; charset=utf-8',
+    'WWW-Authenticate': 'Basic realm="Mapovani predluzeni", charset="UTF-8"',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer'
+  });
+  res.end('Authentication required');
+}
 
 function sendJson(res, statusCode, body) {
   const payload = JSON.stringify(body);
@@ -132,6 +170,11 @@ function proxyGemini(payload) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    if (!isAuthorized(req)) {
+      requestBasicAuth(res);
+      return;
+    }
+
     const url = new URL(req.url, `http://${req.headers.host}`);
 
     if (req.method === 'POST' && url.pathname === '/api/gemini') {
