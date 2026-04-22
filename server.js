@@ -27,6 +27,7 @@ function loadEnvFile() {
 loadEnvFile();
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const CLIENT_REGISTRY_URL = process.env.CLIENT_REGISTRY_URL || '';
 const BASIC_AUTH_USER = process.env.BASIC_AUTH_USER || '';
 const BASIC_AUTH_PASSWORD = process.env.BASIC_AUTH_PASSWORD || '';
 
@@ -168,6 +169,65 @@ function proxyGemini(payload) {
   });
 }
 
+function fetchText(targetUrl) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(targetUrl);
+    const transport = parsed.protocol === 'https:' ? https : http;
+    const request = transport.request({
+      protocol: parsed.protocol,
+      hostname: parsed.hostname,
+      port: parsed.port || undefined,
+      path: `${parsed.pathname}${parsed.search}`,
+      method: 'GET'
+    }, response => {
+      let data = '';
+      response.on('data', chunk => { data += chunk; });
+      response.on('end', () => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          reject(new Error(`Registr klientu vratil chybu (${response.statusCode}).`));
+          return;
+        }
+        resolve(data);
+      });
+    });
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+function parseRegistryResponse(rawText, callbackName) {
+  const text = String(rawText || '').trim();
+  if (!text) return [];
+
+  try {
+    return JSON.parse(text);
+  } catch (jsonError) {
+    const prefix = `${callbackName}(`;
+    if (text.startsWith(prefix) && text.endsWith(')')) {
+      return JSON.parse(text.slice(prefix.length, -1));
+    }
+    if (text.startsWith(prefix) && text.endsWith(');')) {
+      return JSON.parse(text.slice(prefix.length, -2));
+    }
+    throw new Error('Registr klientu nevratil platny JSON.');
+  }
+}
+
+async function fetchClientRegistry() {
+  if (!CLIENT_REGISTRY_URL) {
+    throw new Error('V prostredi chybi CLIENT_REGISTRY_URL.');
+  }
+
+  const callbackName = '__serverRegistryCallback';
+  const targetUrl = `${CLIENT_REGISTRY_URL}${CLIENT_REGISTRY_URL.includes('?') ? '&' : '?'}callback=${callbackName}&_=${Date.now()}`;
+  const rawText = await fetchText(targetUrl);
+  const items = parseRegistryResponse(rawText, callbackName);
+  if (!Array.isArray(items)) {
+    throw new Error('Registr klientu nevratil seznam.');
+  }
+  return items;
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     if (!isAuthorized(req)) {
@@ -182,6 +242,12 @@ const server = http.createServer(async (req, res) => {
       const payload = JSON.parse(rawBody || '{}');
       const result = await proxyGemini(payload);
       sendJson(res, 200, result);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/client-registry') {
+      const items = await fetchClientRegistry();
+      sendJson(res, 200, items);
       return;
     }
 

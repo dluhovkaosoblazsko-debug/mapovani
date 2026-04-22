@@ -1164,8 +1164,6 @@ Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vra
     const JISTOTA_PRIJMU = ['stabilni', 'nejiste', 'kratkodobe'];
     const VYDAJ_TYPY = ['najem', 'energie', 'jidlo', 'doprava', 'telefon', 'leky', 'skola_deti', 'jine'];
     const NEZBYTNOST = ['nezbytne', 'omezitelne', 'volitelne'];
-    const CLIENT_REGISTRY_URL = 'https://script.google.com/macros/s/AKfycbygnuMfWH0AVTNw8GfiSyi4uvp3DNQmd-2VyJKSYXO8PfgsJPDEel9LVS5EqQduWRAjbg/exec';
-
     function nowIso() { return new Date().toISOString(); }
 
     function newCaseId() {
@@ -1522,24 +1520,20 @@ Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vra
       if (showFeedback) showToast();
     }
 
-    function loadClientRegistry(showFeedback = false) {
+    async function loadClientRegistry(showFeedback = false) {
       const status = document.getElementById('clientRegistryStatus');
-      if (status) status.textContent = 'Načítám registr klientů z Google Sheetu...';
+      if (status) status.textContent = 'Načítám registr klientů...';
       try {
-        const callbackName = '__clientRegistryJsonpCallback';
-        window[callbackName] = items => {
-          handleClientRegistryResponse(items, showFeedback);
-        };
-        const previous = document.getElementById('clientRegistryJsonp');
-        if (previous) previous.remove();
-        const script = document.createElement('script');
-        script.id = 'clientRegistryJsonp';
-        script.src = `${CLIENT_REGISTRY_URL}?callback=${callbackName}&_=${Date.now()}`;
-        script.onerror = () => {
-          appData.client_registry.error = 'Nepodařilo se načíst data z Google Sheetu.';
-          renderClientRegistry();
-        };
-        document.body.appendChild(script);
+        const response = await fetch('/api/client-registry', {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' }
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || 'Nepodařilo se načíst data registru.');
+        }
+        const items = await response.json();
+        handleClientRegistryResponse(items, showFeedback);
       } catch (error) {
         appData.client_registry.error = error.message || 'Nepodařilo se načíst data.';
         renderClientRegistry();
