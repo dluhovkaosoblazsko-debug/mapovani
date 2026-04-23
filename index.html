@@ -1117,7 +1117,7 @@ Struktura zprávy:
 2. Přehled závazků.
 3. Analýza rizik.
 4. Doporučené kroky.
-Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vrať čistý text.`;
+Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vrať čistý text. Neuváděj doporučení typu vyhledat dluhového poradce, obrátit se na dluhovou poradnu nebo zahájit další mapování, protože tato zpráva už vzniká v rámci dluhového poradenství.`;
 
         const dataForAI = {
           client: appData.client,
@@ -1825,6 +1825,16 @@ Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vra
         .replace(/\*/g, '')
         .replace(/[ \t]+\n/g, '\n')
         .trim();
+    }
+
+    function sanitizeAiReportText(text) {
+      const cleanedLines = String(text || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .split('\n')
+        .filter(line => !/dluhov[ýy]\s+poradc|vyhledat\s+(dluhov[ée]ho\s+)?poradc|obr[aá]tit\s+se\s+na\s+(dluhov[ée]ho\s+)?poradc/i.test(line))
+        .map(line => line.trimEnd());
+      return cleanedLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
     }
 
     function reportTextToWordHtml(text) {
