@@ -1654,6 +1654,7 @@ Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vra
             <div class="field"><label>Částka (Kč)</label><input type="number" min="0" step="100" value="${safeNumber(item.castka)}" oninput="updateExpenseNumber(${index}, 'castka', this.value)" /></div>
             <div class="field"><label>Nezbytnost</label><select onchange="updateExpense(${index}, 'nezbytnost', this.value)">${selectOptions(NEZBYTNOST, item.nezbytnost || 'nezbytne')}</select></div>
           </div>
+          <div class="field"><label>Komentář</label><input type="text" value="${escapeHtml(item.komentar || '')}" oninput="updateExpense(${index}, 'komentar', this.value)" /></div>
         </div>
       `).join('');
     }
@@ -1763,7 +1764,11 @@ Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vra
       const causeLines = appData.mapping_summary.causes_free_text ? appData.mapping_summary.causes_free_text.split('\n').map(line => line.trim()).filter(Boolean) : ['Neuvedeno.'];
       const contextLines = appData.mapping_summary.causes_context_text ? appData.mapping_summary.causes_context_text.split('\n').map(line => line.trim()).filter(Boolean) : ['Neuvedeno.'];
       const missingDocLines = appData.mapping_summary.missing_docs_text ? appData.mapping_summary.missing_docs_text.split('\n').map(line => line.trim()).filter(Boolean) : ['Neuvedeno.'];
-      const nextStepLines = appData.mapping_summary.report_next_steps ? appData.mapping_summary.report_next_steps.split('\n').map(line => line.trim()).filter(Boolean) : ['Neuvedeno.'];
+      const nextStepLinesRaw = appData.mapping_summary.report_next_steps
+        ? appData.mapping_summary.report_next_steps.split('\n').map(line => line.trim()).filter(Boolean)
+        : [];
+      const nextStepLines = nextStepLinesRaw.filter(line => !/mapov[aá]n|zmapovat|dal[sš][ií]\s+mapov[aá]n/i.test(line));
+      const finalNextStepLines = nextStepLines.length ? nextStepLines : ['Neuvedeno.'];
 
       const lines = [
         `ZPRÁVA Z MAPOVÁNÍ PŘEDLUŽENÍ – ${client.jmeno_klienta || 'bez jména'}`,
@@ -1787,7 +1792,7 @@ Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vra
         ...missingDocLines.map(item => `- ${item}`),
         '',
         '6. Další doporučené kroky',
-        ...nextStepLines.map(item => `- ${item}`)
+        ...finalNextStepLines.map(item => `- ${item}`)
       ];
       return lines.join('\n');
     }
@@ -1880,7 +1885,7 @@ Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vra
     function updateIncome(index, key, value) { appData.budget.income_items[index][key] = value; touch(); }
     function updateIncomeNumber(index, key, value) { appData.budget.income_items[index][key] = safeNumber(value); touch(); renderBudgetSummary(); }
 
-    function addExpense() { appData.budget.expense_items.push({ id: '', typ: 'najem', castka: 0, nezbytnost: 'nezbytne' }); saveCollectionsAndRefresh(); }
+    function addExpense() { appData.budget.expense_items.push({ id: '', typ: 'najem', castka: 0, nezbytnost: 'nezbytne', komentar: '' }); saveCollectionsAndRefresh(); }
     function removeExpense(index) { appData.budget.expense_items.splice(index, 1); saveCollectionsAndRefresh(); }
     function updateExpense(index, key, value) { appData.budget.expense_items[index][key] = value; touch(); }
     function updateExpenseNumber(index, key, value) { appData.budget.expense_items[index][key] = safeNumber(value); touch(); renderBudgetSummary(); }
