@@ -1132,8 +1132,9 @@ Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vra
         const responseText = await callGeminiAPI(`Vygeneruj zprávu na základě těchto dat klienta: ${JSON.stringify(dataForAI)}`, systemPrompt, false);
 
         if (responseText) {
-          appData.report.generated_text = responseText;
-          appData.report.edited_text = responseText;
+          const sanitizedAiText = sanitizeAiReportText(responseText);
+          appData.report.generated_text = sanitizedAiText;
+          appData.report.edited_text = sanitizedAiText;
           touch();
           renderMappingSummary();
           alert('Chytrá zpráva byla vygenerována pomocí AI.');
@@ -1841,42 +1842,79 @@ Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vra
       const lines = sanitizeReportExportText(text).split('\n');
       const blocks = [];
       let bulletItems = [];
+      let debtRows = [];
+      let currentSection = '';
 
       function flushBullets() {
         if (!bulletItems.length) return;
-        blocks.push(`<ul style="margin: 0 0 14px 22px; padding: 0;">${bulletItems.join('')}</ul>`);
+        blocks.push(`<ul style="margin: 0 0 14px 22px; padding: 0; text-align: justify;">${bulletItems.join('')}</ul>`);
         bulletItems = [];
+      }
+
+      function flushDebtTable() {
+        if (!debtRows.length) return;
+        const header = `
+          <tr>
+            <th style="border: 1px solid #cbb9a6; background: #f3e5d6; padding: 8px 10px; text-align: left;">Věřitel</th>
+            <th style="border: 1px solid #cbb9a6; background: #f3e5d6; padding: 8px 10px; text-align: left;">Výše dluhu</th>
+            <th style="border: 1px solid #cbb9a6; background: #f3e5d6; padding: 8px 10px; text-align: left;">Stav dluhu</th>
+          </tr>`;
+        const rows = debtRows.map(row => `
+          <tr>
+            <td style="border: 1px solid #d8cabd; padding: 8px 10px; vertical-align: top;">${escapeHtml(row.creditor)}</td>
+            <td style="border: 1px solid #d8cabd; padding: 8px 10px; vertical-align: top;">${escapeHtml(row.amount)}</td>
+            <td style="border: 1px solid #d8cabd; padding: 8px 10px; vertical-align: top;">${escapeHtml(row.status)}</td>
+          </tr>`).join('');
+        blocks.push(`<table style="width: 100%; border-collapse: collapse; margin: 0 0 16px; font-size: 11pt;">${header}${rows}</table>`);
+        debtRows = [];
       }
 
       lines.forEach((rawLine, index) => {
         const line = rawLine.trim();
         if (!line) {
           flushBullets();
+          flushDebtTable();
           return;
         }
 
         if (index === 0) {
           flushBullets();
+          flushDebtTable();
           blocks.push(`<h1 style="font-family: Calibri, Arial, sans-serif; font-size: 20pt; margin: 0 0 18px; color: #1f2937;">${escapeHtml(line)}</h1>`);
           return;
         }
 
         if (/^\d+\.\s+/.test(line)) {
           flushBullets();
+          flushDebtTable();
+          currentSection = line;
           blocks.push(`<h2 style="font-family: Calibri, Arial, sans-serif; font-size: 13.5pt; margin: 18px 0 8px; color: #1f2937;">${escapeHtml(line)}</h2>`);
           return;
         }
 
         if (/^- /.test(line)) {
+          if (currentSection === '2. Závazky') {
+            const match = line.match(/^- (.*?) \| výše: (.*?) \| stav: (.*)$/i);
+            if (match) {
+              debtRows.push({
+                creditor: match[1].trim(),
+                amount: match[2].trim(),
+                status: match[3].trim()
+              });
+              return;
+            }
+          }
           bulletItems.push(`<li style="margin: 0 0 6px;">${escapeHtml(line.replace(/^- /, ''))}</li>`);
           return;
         }
 
         flushBullets();
-        blocks.push(`<p style="margin: 0 0 12px; line-height: 1.55;">${escapeHtml(line)}</p>`);
+        flushDebtTable();
+        blocks.push(`<p style="margin: 0 0 12px; line-height: 1.55; text-align: justify;">${escapeHtml(line)}</p>`);
       });
 
       flushBullets();
+      flushDebtTable();
       return blocks.join('');
     }
 
@@ -1938,7 +1976,7 @@ Piš formálně, odstavcově, v češtině. Nepoužívej markdownové bloky, vra
       if (!content) { alert('ZprĂˇva je zatĂ­m prĂˇzdnĂˇ.'); return; }
 
       const cleanContent = sanitizeReportExportText(content);
-      const preHtml = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>ZprĂˇva</title><style>body{font-family:Calibri,Arial,sans-serif;color:#111827;font-size:11pt;margin:32px;} p,li{font-size:11pt;} ul{list-style-type:disc;}</style></head><body>";
+      const preHtml = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>ZprĂˇva</title><style>body{font-family:Calibri,Arial,sans-serif;color:#111827;font-size:11pt;margin:32px;} p,li{font-size:11pt;text-align:justify;} ul{list-style-type:disc;text-align:justify;} h1,h2{text-align:left;}</style></head><body>";
       const postHtml = "</body></html>";
       const htmlContent = reportTextToWordHtml(cleanContent);
       const html = preHtml + htmlContent + postHtml;
